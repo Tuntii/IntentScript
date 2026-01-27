@@ -1,4 +1,0 @@
-task "minimal" v1.0 {
-  goal: "Test"
-  run: step1
-}

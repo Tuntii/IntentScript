@@ -1,5 +1,0 @@
-task "test_run" v1.0 {
-  goal: "Test run command"
-  input: data: text
-  run: read_file("test.txt")
-}
