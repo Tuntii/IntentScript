@@ -1,0 +1,26 @@
+[package]
+name = "intentscript-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "intentscript"
+path = "src/main.rs"
+
+[lib]
+name = "intentscript_cli"
+path = "src/lib.rs"
+
+[dependencies]
+intentscript-core = { path = "../intentscript-core" }
+intentscript-parser = { path = "../intentscript-parser" }
+intentscript-compiler = { path = "../intentscript-compiler" }
+intentscript-runtime = { path = "../intentscript-runtime" }
+clap = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+tempfile = "3.8"

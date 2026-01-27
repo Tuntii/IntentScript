@@ -1,0 +1,15 @@
+[package]
+name = "intentscript-runtime"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+intentscript-core = { path = "../intentscript-core" }
+intentscript-compiler = { path = "../intentscript-compiler" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }

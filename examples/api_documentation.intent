@@ -1,0 +1,22 @@
+// API Documentation Generation Task
+// This task generates comprehensive API documentation from OpenAPI spec.
+// It demonstrates OpenAPI parsing and template rendering.
+
+task "ApiDocumentationGenerator" v1.0 {
+  // Define the goal: generate API documentation
+  goal: "Generate comprehensive API documentation from OpenAPI specification"
+  
+  // Inputs: OpenAPI spec and documentation options
+  input: openapi_spec: path
+  input: output_format: text = "markdown"
+  input: include_examples: bool = true
+  
+  // Execution pipeline: parse OpenAPI -> render docs -> validate
+  run:
+    read_file(openapi_spec) ->
+    parse_openapi ->
+    render_template("api_docs") ->
+    write_file("api_documentation.md") ->
+    validate ->
+    report("markdown")
+}

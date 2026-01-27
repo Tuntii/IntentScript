@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "meta": {
+    "task_name": "test_run",
+    "task_version": "1.0",
+    "compiler_version": "0.1.0",
+    "policy_hash": "6d73d8e1421aa92eeafa75dd1909a453b0ce3b4bccc48c5dca3aa37a724fd683"
+  },
+  "inputs": [
+    {
+      "name": "data",
+      "type_name": "text",
+      "required": true
+    }
+  ],
+  "capabilities": {
+    "net": false,
+    "exec": false,
+    "templates": false,
+    "exports": false
+  },
+  "limits": {
+    "max_repairs": 2
+  },
+  "steps": [
+    {
+      "id": "step_1",
+      "kind": {
+        "type": "ReadFile"
+      },
+      "args": {
+        "arg_0": "test.txt"
+      },
+      "produces": "step_1_result",
+      "checks": []
+    }
+  ],
+  "outputs": []
+}

@@ -1,0 +1,21 @@
+// Data Export Task
+// This task exports structured data to Excel format.
+// It demonstrates JSON input parsing and data transformation.
+
+task "DataToExcelExport" v1.0 {
+  // Define the goal: export JSON data to Excel spreadsheet
+  goal: "Convert JSON data to Excel spreadsheet with formatting"
+  
+  // Inputs: JSON data file and export configuration
+  input: data_file: path
+  input: sheet_name: text = "Data"
+  input: include_headers: bool = true
+  
+  // Execution pipeline: read JSON -> transform -> export to XLSX
+  run:
+    read_file(data_file) ->
+    parse_json ->
+    validate ->
+    export_xlsx("data_export.xlsx") ->
+    report("json")
+}

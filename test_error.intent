@@ -1,0 +1,4 @@
+﻿task "error_task" {
+  goal: "Missing run section"
+  input: data: text
+}

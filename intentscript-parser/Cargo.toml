@@ -1,0 +1,13 @@
+[package]
+name = "intentscript-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+intentscript-core = { path = "../intentscript-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }

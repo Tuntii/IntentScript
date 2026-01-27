@@ -1,0 +1,18 @@
+// OpenAPI Lint Task
+// This task validates an OpenAPI specification file against RustAPI policies.
+// It demonstrates file input handling, domain-specific parsing, and validation.
+
+task "RustApiOpenApiLint" v1.0 {
+  // Define the goal: enforce the rustapi-default OpenAPI policy
+  goal: "Enforce OpenAPI policy for RustAPI projects"
+  
+  // Input: path to the OpenAPI specification file
+  input: openapi_file: path
+  
+  // Execution pipeline: read -> parse -> validate -> report
+  run:
+    read_file(openapi_file) ->
+    parse_openapi ->
+    validate ->
+    report("markdown")
+}

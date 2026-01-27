@@ -1,0 +1,17 @@
+// Simple Validation Task
+// A minimal example demonstrating basic IntentScript features.
+// This is a good starting point for learning the language.
+
+task "SimpleFileValidator" v1.0 {
+  // Define the goal: validate a text file
+  goal: "Validate that a text file meets basic requirements"
+  
+  // Input: single file path
+  input: file_path: path
+  
+  // Simple pipeline: read -> validate -> report
+  run:
+    read_file(file_path) ->
+    validate ->
+    report("text")
+}

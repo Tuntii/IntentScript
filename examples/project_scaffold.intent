@@ -1,0 +1,22 @@
+// Project Scaffolding Task
+// This task generates a new RustAPI project from a template.
+// It demonstrates multiple inputs and template rendering.
+
+task "RustApiProjectScaffold" v1.0 {
+  // Define the goal: create a new RustAPI project
+  goal: "Generate a new RustAPI project from template"
+  
+  // Inputs: project configuration
+  input: project_name: text
+  input: author: text = "RustAPI Developer"
+  input: include_auth: bool = true
+  
+  // Execution pipeline: render templates -> write files -> validate
+  run:
+    render_template("project_base") ->
+    write_file("Cargo.toml") ->
+    render_template("main_rs") ->
+    write_file("src/main.rs") ->
+    validate ->
+    report("markdown")
+}

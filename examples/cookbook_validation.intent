@@ -1,0 +1,18 @@
+// Cookbook Validation Task
+// This task validates documentation in a cookbook directory.
+// It demonstrates directory scanning and markdown parsing.
+
+task "RustApiCookbookCheck" v1.0 {
+  // Define the goal: validate cookbook documentation
+  goal: "Validate documentation in the RustAPI cookbook"
+  
+  // Input: path to the docs root directory
+  input: docs_root: path = "./cookbook"
+  
+  // Execution pipeline: scan markdown files -> validate -> report
+  run:
+    scan(docs_root) ->
+    parse_markdown ->
+    validate ->
+    report("json")
+}
