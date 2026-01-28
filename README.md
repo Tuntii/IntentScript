@@ -262,9 +262,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Resources
 
 - [Language Specification](spec.md)
-- [Design Document](.kiro/specs/intentscript-compiler/design.md)
-- [Requirements Document](.kiro/specs/intentscript-compiler/requirements.md)
-- [Task List](.kiro/specs/intentscript-compiler/tasks.md)
 
 ## Status
 
@@ -278,5 +275,3 @@ IntentScript is under active development. Core features are implemented:
 - ✅ Property-based testing
 - 🚧 Documentation (in progress)
 - 🚧 Additional examples
-
-See the [task list](.kiro/specs/intentscript-compiler/tasks.md) for current progress.
