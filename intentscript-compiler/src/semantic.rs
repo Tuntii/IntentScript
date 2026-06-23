@@ -8,6 +8,21 @@ use intentscript_parser::{
 };
 use std::collections::HashMap;
 
+fn is_builtin_pipeline_step(name: &str) -> bool {
+    matches!(
+        name,
+        "read_file"
+            | "write_file"
+            | "parse_openapi"
+            | "parse_markdown"
+            | "render_template"
+            | "export_xlsx"
+            | "export_pdf"
+            | "validate"
+            | "report"
+    )
+}
+
 /// Symbol table for tracking inputs, constraints, and pipeline variables
 #[derive(Debug, Clone, Default)]
 pub struct SymbolTable {
@@ -215,8 +230,9 @@ impl TypeChecker {
                     self.check_call(call)?;
                 }
                 Step::Ident(name, span) => {
-                    // Check that the identifier is defined
-                    if self.symbol_table.lookup_type(name).is_none() {
+                    if !is_builtin_pipeline_step(name)
+                        && self.symbol_table.lookup_type(name).is_none()
+                    {
                         self.add_error(Error::semantic(
                             *span,
                             format!("Undefined identifier in pipeline: {}", name),

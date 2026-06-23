@@ -1,6 +1,7 @@
 // Property-based tests for IR lowering
 // Feature: intentscript-compiler
 
+use intentscript_compiler::ir::StepKind;
 use intentscript_compiler::{Lowering, Policy};
 use intentscript_core::Span;
 use intentscript_parser::{
@@ -721,24 +722,24 @@ fn property_pipeline_step_lowering() -> TestResult {
 #[quickcheck]
 fn property_pipeline_identifier_step_lowering() -> TestResult {
     let mut g = Gen::new(10);
-    let ident_name = gen_identifier(&mut g);
-    
-    // Create a pipeline with an identifier step
+    let builtin_steps = ["validate", "parse_openapi", "parse_markdown", "report"];
+    let ident_name = builtin_steps[(gen_identifier(&mut g).len()) % builtin_steps.len()].to_string();
+
     let pipeline = Pipeline {
         steps: vec![Step::Ident(ident_name.clone(), default_span())],
         span: default_span(),
     };
-    
+
     let task = Task {
         name: "test_task".to_string(),
         version: None,
         sections: vec![Section::Run(pipeline)],
         span: default_span(),
     };
-    
+
     let policy = Policy::new();
     let lowering = Lowering::new(policy);
-    
+
     let plan = match lowering.lower_task(&task) {
         Ok(plan) => plan,
         Err(e) => {
@@ -746,23 +747,30 @@ fn property_pipeline_identifier_step_lowering() -> TestResult {
             return TestResult::failed();
         }
     };
-    
-    // Should have 1 step in the IR
+
     if plan.steps.len() != 1 {
         println!("Expected 1 step, got {}", plan.steps.len());
         return TestResult::failed();
     }
-    
-    // The step should have the identifier name in produces
-    if let Some(produces) = &plan.steps[0].produces {
-        if produces == &ident_name {
-            TestResult::passed()
-        } else {
-            println!("Expected produces to be '{}', got '{}'", ident_name, produces);
-            TestResult::failed()
-        }
+
+    let step = &plan.steps[0];
+    let expected_kind = match ident_name.as_str() {
+        "validate" => StepKind::Validate,
+        "parse_openapi" => StepKind::ParseOpenApi,
+        "parse_markdown" => StepKind::ParseMarkdown,
+        "report" => StepKind::Report,
+        _ => return TestResult::failed(),
+    };
+
+    if step.kind != expected_kind {
+        println!("Expected kind {:?}, got {:?}", expected_kind, step.kind);
+        return TestResult::failed();
+    }
+
+    if step.produces.as_deref() == Some("step_1_result") {
+        TestResult::passed()
     } else {
-        println!("Step has no produces field");
+        println!("Expected produces 'step_1_result', got {:?}", step.produces);
         TestResult::failed()
     }
 }
@@ -938,16 +946,17 @@ fn property_check_embedding() -> TestResult {
                         args: vec![],
                         span: default_span(),
                     }),
+                    Step::Ident("validate".to_string(), default_span()),
                 ],
                 span: default_span(),
             }),
         ],
         span: default_span(),
     };
-    
+
     let policy = Policy::new();
     let lowering = Lowering::new(policy);
-    
+
     let plan = match lowering.lower_task(&task) {
         Ok(plan) => plan,
         Err(e) => {
@@ -955,8 +964,7 @@ fn property_check_embedding() -> TestResult {
             return TestResult::failed();
         }
     };
-    
-    // Check that at least one step has checks embedded
+
     let has_checks = plan.steps.iter().any(|step| !step.checks.is_empty());
     
     if !has_checks {
@@ -1014,16 +1022,17 @@ fn property_multiple_checks_embedding() -> TestResult {
                         args: vec![],
                         span: default_span(),
                     }),
+                    Step::Ident("validate".to_string(), default_span()),
                 ],
                 span: default_span(),
             }),
         ],
         span: default_span(),
     };
-    
+
     let policy = Policy::new();
     let lowering = Lowering::new(policy);
-    
+
     let plan = match lowering.lower_task(&task) {
         Ok(plan) => plan,
         Err(e) => {
@@ -1031,8 +1040,7 @@ fn property_multiple_checks_embedding() -> TestResult {
             return TestResult::failed();
         }
     };
-    
-    // Count total checks across all steps
+
     let total_checks: usize = plan.steps.iter().map(|step| step.checks.len()).sum();
     
     if total_checks >= 2 {

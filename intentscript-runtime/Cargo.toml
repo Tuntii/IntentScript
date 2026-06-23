@@ -6,10 +6,12 @@ edition.workspace = true
 [dependencies]
 intentscript-core = { path = "../intentscript-core" }
 intentscript-compiler = { path = "../intentscript-compiler" }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_yaml = "0.9"
 thiserror = { workspace = true }
 
 [dev-dependencies]
+intentscript-parser = { path = "../intentscript-parser" }
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }

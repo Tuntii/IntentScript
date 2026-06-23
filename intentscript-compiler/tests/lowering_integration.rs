@@ -131,11 +131,17 @@ fn test_lower_task_with_checks() {
                 span: default_span(),
             }]),
             Section::Run(Pipeline {
-                steps: vec![Step::Call(CallExpr {
-                    name: "process".to_string(),
-                    args: vec![],
-                    span: default_span(),
-                })],
+                steps: vec![
+                    Step::Call(CallExpr {
+                        name: "read_file".to_string(),
+                        args: vec![Arg::Positional(Expr::Literal(
+                            Literal::String("input.txt".to_string()),
+                            default_span(),
+                        ))],
+                        span: default_span(),
+                    }),
+                    Step::Ident("validate".to_string(), default_span()),
+                ],
                 span: default_span(),
             }),
         ],

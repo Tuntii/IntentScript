@@ -197,10 +197,20 @@ impl Lowering {
                         fs_enabled = true;
                     }
                 }
-                "fs_write" => {
+                "fs_write" | "fs_write_roots" => {
                     if let ConstraintValue::Literal(Literal::String(path)) = &constraint.value {
                         write_roots.push(path.clone());
                         fs_enabled = true;
+                    }
+                }
+                "fs_read_roots" => {
+                    fs_enabled = true;
+                    if let ConstraintValue::Literal(Literal::String(path)) = &constraint.value {
+                        read_roots.push(path.clone());
+                    } else if let ConstraintValue::Expr(Expr::Literal(Literal::String(path), _)) =
+                        &constraint.value
+                    {
+                        read_roots.push(path.clone());
                     }
                 }
                 "net" => {
@@ -228,8 +238,12 @@ impl Lowering {
         }
 
         let fs = if fs_enabled {
+            let mut roots = read_roots;
+            if roots.is_empty() {
+                roots.push(".".to_string());
+            }
             Some(FsCapability {
-                read_roots,
+                read_roots: roots,
                 write_roots,
             })
         } else {
@@ -249,6 +263,7 @@ impl Lowering {
     fn lower_pipeline(&self, pipeline: &Pipeline, checks: &[CheckDecl]) -> Result<Vec<IRStep>, Error> {
         let mut ir_steps = Vec::new();
         let mut step_counter = 0;
+        let mut previous_produces: Option<String> = None;
 
         for step in &pipeline.steps {
             step_counter += 1;
@@ -256,20 +271,15 @@ impl Lowering {
 
             match step {
                 Step::Call(call) => {
-                    let ir_step = self.lower_call_to_step(&step_id, call, checks)?;
+                    let ir_step =
+                        self.lower_call_to_step(&step_id, call, checks, previous_produces.as_deref())?;
+                    previous_produces = ir_step.produces.clone();
                     ir_steps.push(ir_step);
                 }
                 Step::Ident(name, _) => {
-                    // An identifier step is a reference to a variable or function
-                    let ir_step = IRStep {
-                        id: step_id,
-                        kind: StepKind::Custom {
-                            name: name.clone(),
-                        },
-                        args: HashMap::new(),
-                        produces: Some(name.clone()),
-                        checks: Vec::new(),
-                    };
+                    let ir_step =
+                        self.lower_ident_to_step(&step_id, name, checks, previous_produces.as_deref())?;
+                    previous_produces = ir_step.produces.clone();
                     ir_steps.push(ir_step);
                 }
             }
@@ -278,12 +288,55 @@ impl Lowering {
         Ok(ir_steps)
     }
 
+    fn lower_ident_to_step(
+        &self,
+        step_id: &str,
+        name: &str,
+        checks: &[CheckDecl],
+        previous_produces: Option<&str>,
+    ) -> Result<IRStep, Error> {
+        let kind = match name {
+            "parse_openapi" => StepKind::ParseOpenApi,
+            "parse_markdown" => StepKind::ParseMarkdown,
+            "validate" => StepKind::Validate,
+            "report" => StepKind::Report,
+            other => StepKind::Custom {
+                name: other.to_string(),
+            },
+        };
+
+        let mut args = HashMap::new();
+        if let Some(prev) = previous_produces {
+            match kind {
+                StepKind::ParseOpenApi | StepKind::ParseMarkdown => {
+                    args.insert("content".to_string(), json!(prev));
+                }
+                _ => {}
+            }
+        }
+
+        let step_checks = if matches!(kind, StepKind::Validate) {
+            self.lower_checks(checks)
+        } else {
+            Vec::new()
+        };
+
+        Ok(IRStep {
+            id: step_id.to_string(),
+            kind,
+            args,
+            produces: Some(format!("{}_result", step_id)),
+            checks: step_checks,
+        })
+    }
+
     /// Lower a call expression to an IR step
     fn lower_call_to_step(
         &self,
         step_id: &str,
         call: &CallExpr,
         checks: &[CheckDecl],
+        previous_produces: Option<&str>,
     ) -> Result<IRStep, Error> {
         // Determine step kind based on function name
         let kind = match call.name.as_str() {
@@ -360,8 +413,33 @@ impl Lowering {
                     }
                 }
             }
+            "parse_openapi" | "parse_markdown" => {
+                if let Some(prev) = previous_produces {
+                    args.insert("content".to_string(), json!(prev));
+                }
+                for arg in &call.args {
+                    if let Arg::Named { name, value } = arg {
+                        let json_value = self.expr_to_json(value)?;
+                        args.insert(name.clone(), json_value);
+                    }
+                }
+            }
+            "report" => {
+                for (i, arg) in call.args.iter().enumerate() {
+                    match arg {
+                        Arg::Named { name, value } => {
+                            let json_value = self.expr_to_json(value)?;
+                            args.insert(name.clone(), json_value);
+                        }
+                        Arg::Positional(expr) => {
+                            let param_name = if i == 0 { "format" } else { "arg" };
+                            let json_value = self.expr_to_json(expr)?;
+                            args.insert(param_name.to_string(), json_value);
+                        }
+                    }
+                }
+            }
             _ => {
-                // Generic handling for other functions
                 for arg in &call.args {
                     match arg {
                         Arg::Named { name, value } => {
@@ -369,7 +447,6 @@ impl Lowering {
                             args.insert(name.clone(), json_value);
                         }
                         Arg::Positional(expr) => {
-                            // For positional args, use index as key
                             let index = args.len();
                             let json_value = self.expr_to_json(expr)?;
                             args.insert(format!("arg_{}", index), json_value);
@@ -379,8 +456,11 @@ impl Lowering {
             }
         }
 
-        // Embed checks for this step
-        let step_checks = self.lower_checks(checks);
+        let step_checks = if matches!(kind, StepKind::Validate) {
+            self.lower_checks(checks)
+        } else {
+            Vec::new()
+        };
 
         Ok(IRStep {
             id: step_id.to_string(),
@@ -397,9 +477,48 @@ impl Lowering {
             .iter()
             .map(|check| {
                 let mut args = HashMap::new();
-                for (i, arg) in check.args.iter().enumerate() {
-                    if let Ok(json_value) = self.expr_to_json(arg) {
-                        args.insert(format!("arg_{}", i), json_value);
+
+                match check.name.as_str() {
+                    "must_include_paths_prefix" | "must_not_be_empty" => {
+                        if let Some(arg) = check.args.first() {
+                            if let Ok(json_value) = self.expr_to_json(arg) {
+                                let key = if check.name == "must_include_paths_prefix" {
+                                    "prefix"
+                                } else {
+                                    "arg_0"
+                                };
+                                args.insert(key.to_string(), json_value);
+                            }
+                        }
+                    }
+                    "must_have_security_schemes" => {
+                        if let Some(Expr::Literal(Literal::String(scheme), _)) = check.args.first()
+                        {
+                            args.insert("schemes".to_string(), json!(vec![scheme]));
+                        } else if let Some(arg) = check.args.first() {
+                            if let Ok(json_value) = self.expr_to_json(arg) {
+                                args.insert("schemes".to_string(), json!(vec![json_value]));
+                            }
+                        }
+                    }
+                    "must_have_sections" | "must_not_contain" => {
+                        let key = if check.name == "must_have_sections" {
+                            "sections"
+                        } else {
+                            "patterns"
+                        };
+                        if let Some(arg) = check.args.first() {
+                            if let Ok(json_value) = self.expr_to_json(arg) {
+                                args.insert(key.to_string(), json_value);
+                            }
+                        }
+                    }
+                    _ => {
+                        for (i, arg) in check.args.iter().enumerate() {
+                            if let Ok(json_value) = self.expr_to_json(arg) {
+                                args.insert(format!("arg_{}", i), json_value);
+                            }
+                        }
                     }
                 }
 
