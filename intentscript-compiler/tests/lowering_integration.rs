@@ -1,6 +1,7 @@
 // Integration tests for IR lowering
 // Verifies end-to-end lowering from AST to ExecutionPlan
 
+use intentscript_compiler::ir::StepKind;
 use intentscript_compiler::{Lowering, Policy};
 use intentscript_core::Span;
 use intentscript_parser::{
@@ -153,10 +154,20 @@ fn test_lower_task_with_checks() {
 
     let plan = lowering.lower_task(&task).expect("Failed to lower task");
 
-    // Verify checks are embedded in steps
     assert!(!plan.steps.is_empty());
-    let has_checks = plan.steps.iter().any(|step| !step.checks.is_empty());
-    assert!(has_checks, "Expected at least one step to have checks");
+    let validate_step = plan
+        .steps
+        .iter()
+        .find(|step| matches!(step.kind, StepKind::Validate))
+        .expect("validate step present");
+    assert!(
+        !validate_step.checks.is_empty(),
+        "validate step must embed task checks"
+    );
+    eprintln!(
+        "validate_step_checks_count={}",
+        validate_step.checks.len()
+    );
 }
 
 #[test]

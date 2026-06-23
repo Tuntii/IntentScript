@@ -659,6 +659,15 @@ fn property_type_mismatch_primitives(
         return TestResult::discard();
     }
 
+    // String literals are valid defaults for path/url/email inputs
+    if matches!(
+        expected_type.0,
+        PrimitiveType::Path | PrimitiveType::Url | PrimitiveType::Email
+    ) && actual_type.0 == PrimitiveType::Text
+    {
+        return TestResult::discard();
+    }
+
     // Only test types that have literal representations
     let actual_literal = match actual_type.0 {
         PrimitiveType::Bool => Literal::Bool(true),

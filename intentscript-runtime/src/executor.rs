@@ -173,17 +173,15 @@ impl<'a> Executor<'a> {
         );
 
         for input_spec in &plan.inputs {
-            if input_spec.required && !inputs.contains_key(&input_spec.name) {
-                if let Some(default) = &input_spec.default {
-                    state.set_variable(input_spec.name.clone(), Value::Json(default.clone()));
-                } else {
-                    return Err(Error::runtime(format!(
-                        "Required input '{}' not provided",
-                        input_spec.name
-                    )));
-                }
-            } else if let Some(value) = inputs.get(&input_spec.name) {
+            if let Some(value) = inputs.get(&input_spec.name) {
                 state.set_variable(input_spec.name.clone(), Value::Json(value.clone()));
+            } else if let Some(default) = &input_spec.default {
+                state.set_variable(input_spec.name.clone(), Value::Json(default.clone()));
+            } else if input_spec.required {
+                return Err(Error::runtime(format!(
+                    "Required input '{}' not provided",
+                    input_spec.name
+                )));
             }
         }
 
@@ -366,15 +364,14 @@ impl<'a> Executor<'a> {
 
     fn execute_read_file(&self, step: &IRStep, state: &mut ExecutionState) -> Result<Value> {
         let path = self.resolve_path_arg(step.args.get("path"), state)?;
+        let resolved_path = self.capability_checker.resolve_fs_read_path(&path)?;
 
-        self.capability_checker.check_fs_read(&path)?;
-
-        let bytes = self.host.read_file(&path)?;
+        let bytes = self.host.read_file(&resolved_path)?;
 
         state.log(
             "read_file",
             serde_json::json!({
-                "path": path,
+                "path": resolved_path,
                 "size": bytes.len(),
             }),
         );
@@ -384,7 +381,7 @@ impl<'a> Executor<'a> {
 
     fn execute_write_file(&self, step: &IRStep, state: &mut ExecutionState) -> Result<Value> {
         let path = self.resolve_path_arg(step.args.get("path"), state)?;
-        self.capability_checker.check_fs_write(&path)?;
+        let resolved_path = self.capability_checker.resolve_fs_write_path(&path)?;
 
         let content_var = step
             .args
@@ -402,12 +399,12 @@ impl<'a> Executor<'a> {
             _ => return Err(Error::runtime("WriteFile content must be Bytes or String")),
         };
 
-        self.host.write_file(&path, &bytes)?;
+        self.host.write_file(&resolved_path, &bytes)?;
 
         state.log(
             "write_file",
             serde_json::json!({
-                "path": path,
+                "path": resolved_path,
                 "size": bytes.len(),
             }),
         );

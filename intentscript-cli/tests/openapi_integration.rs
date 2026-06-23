@@ -77,3 +77,58 @@ fn run_openapi_lint_produces_report_artifact() {
     assert!(stdout.contains("Artifacts"));
     assert!(stdout.contains("Audit Log"));
 }
+
+#[test]
+fn build_cookbook_validation_succeeds() {
+    let temp = TempDir::new().unwrap();
+    let ir_path = temp.path().join("cookbook.ir.json");
+
+    let build = cargo_intentscript(&[
+        "build",
+        "examples/cookbook_validation.intent",
+        "--output",
+        ir_path.to_str().unwrap(),
+    ]);
+    assert_eq!(
+        build.status.code().unwrap(),
+        0,
+        "cookbook build failed: {:?}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let ir = fs::read_to_string(&ir_path).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&ir).unwrap();
+    let validate = json["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["kind"]["type"] == "Validate")
+        .expect("validate step in IR");
+    assert!(validate["checks"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
+fn run_cookbook_validation_with_default_input() {
+    let temp = TempDir::new().unwrap();
+    let ir_path = temp.path().join("cookbook.ir.json");
+
+    let build = cargo_intentscript(&[
+        "build",
+        "examples/cookbook_validation.intent",
+        "--output",
+        ir_path.to_str().unwrap(),
+    ]);
+    assert_eq!(build.status.code().unwrap(), 0);
+
+    let run = cargo_intentscript(&["run", ir_path.to_str().unwrap()]);
+    assert_eq!(
+        run.status.code().unwrap(),
+        0,
+        "cookbook run failed: {:?}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("successfully") || stdout.contains("PASSED"));
+    assert!(stdout.contains("RustApiCookbookCheck"));
+}

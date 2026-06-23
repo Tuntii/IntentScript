@@ -582,13 +582,31 @@ impl SemanticAnalyzer {
 
         // If there's a default value, check it matches the type
         if let Some(default) = &input.default {
-            let default_type = self
-                .type_checker
-                .infer_literal_type(default, input.span);
-            if !self
-                .type_checker
-                .types_compatible(&input.type_expr, &default_type)
-            {
+            let default_ok = match (&input.type_expr, default) {
+                (
+                    TypeExpr::Primitive(PrimitiveType::Path, _),
+                    Literal::String(_),
+                )
+                | (
+                    TypeExpr::Primitive(PrimitiveType::Url, _),
+                    Literal::String(_),
+                )
+                | (
+                    TypeExpr::Primitive(PrimitiveType::Email, _),
+                    Literal::String(_),
+                ) => true,
+                _ => {
+                    let default_type = self
+                        .type_checker
+                        .infer_literal_type(default, input.span);
+                    self.type_checker
+                        .types_compatible(&input.type_expr, &default_type)
+                }
+            };
+            if !default_ok {
+                let default_type = self
+                    .type_checker
+                    .infer_literal_type(default, input.span);
                 self.type_checker.add_error(Error::type_error(
                     input.span,
                     format!("{:?}", input.type_expr),

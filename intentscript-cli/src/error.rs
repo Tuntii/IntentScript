@@ -7,8 +7,6 @@ use std::io;
 pub enum CliError {
     /// IO error
     Io(io::Error),
-    /// Compiler error
-    Compiler(Vec<CoreError>),
     /// Runtime error
     Runtime(CoreError),
     /// Invalid input
@@ -21,13 +19,6 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CliError::Io(e) => write!(f, "IO error: {}", e),
-            CliError::Compiler(errors) => {
-                writeln!(f, "Compilation failed with {} error(s):", errors.len())?;
-                for error in errors {
-                    writeln!(f, "  {}", error)?;
-                }
-                Ok(())
-            }
             CliError::Runtime(e) => write!(f, "Runtime error: {}", e),
             CliError::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
             CliError::Other(msg) => write!(f, "{}", msg),

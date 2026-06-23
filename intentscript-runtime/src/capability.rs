@@ -7,6 +7,11 @@ pub struct CapabilityChecker {
     capabilities: Capabilities,
 }
 
+enum FsAccess {
+    Read,
+    Write,
+}
+
 impl CapabilityChecker {
     /// Create a new capability checker with the given capabilities
     pub fn new(capabilities: Capabilities) -> Self {
@@ -15,59 +20,55 @@ impl CapabilityChecker {
 
     /// Check if filesystem read access is allowed for the given path
     pub fn check_fs_read(&self, path: &str) -> Result<()> {
-        match &self.capabilities.fs {
-            None => Err(Error::capability_violation(
-                "Filesystem capability not enabled",
-            )),
-            Some(fs_cap) => {
-                if fs_cap.read_roots.is_empty() {
-                    return Err(Error::capability_violation(
-                        "No read roots configured for filesystem capability",
-                    ));
-                }
+        self.resolve_fs_read_path(path).map(|_| ())
+    }
 
-                let normalized_path = Self::normalize_path(path);
-                
-                for root in &fs_cap.read_roots {
-                    let normalized_root = Self::normalize_path(root);
-                    if normalized_path.starts_with(&normalized_root) {
-                        return Ok(());
-                    }
-                }
-
-                Err(Error::capability_violation(format!(
-                    "Path '{}' is not within allowed read roots: {:?}",
-                    path, fs_cap.read_roots
-                )))
-            }
-        }
+    /// Resolve a read path against configured read roots after capability checks.
+    pub fn resolve_fs_read_path(&self, path: &str) -> Result<String> {
+        self.resolve_fs_path(path, FsAccess::Read)
+            .map(|p| p.to_string_lossy().to_string())
     }
 
     /// Check if filesystem write access is allowed for the given path
     pub fn check_fs_write(&self, path: &str) -> Result<()> {
+        self.resolve_fs_write_path(path).map(|_| ())
+    }
+
+    /// Resolve a write path against configured write roots after capability checks.
+    pub fn resolve_fs_write_path(&self, path: &str) -> Result<String> {
+        self.resolve_fs_path(path, FsAccess::Write)
+            .map(|p| p.to_string_lossy().to_string())
+    }
+
+    fn resolve_fs_path(&self, path: &str, access: FsAccess) -> Result<std::path::PathBuf> {
         match &self.capabilities.fs {
             None => Err(Error::capability_violation(
                 "Filesystem capability not enabled",
             )),
             Some(fs_cap) => {
-                if fs_cap.write_roots.is_empty() {
-                    return Err(Error::capability_violation(
-                        "No write roots configured for filesystem capability",
-                    ));
+                let (roots, access_label) = match access {
+                    FsAccess::Read => (&fs_cap.read_roots, "read"),
+                    FsAccess::Write => (&fs_cap.write_roots, "write"),
+                };
+
+                if roots.is_empty() {
+                    return Err(Error::capability_violation(format!(
+                        "No {access_label} roots configured for filesystem capability"
+                    )));
                 }
 
-                let normalized_path = Self::normalize_path(path);
-                
-                for root in &fs_cap.write_roots {
+                let normalized_path = Self::resolve_path_against_roots(path, roots);
+
+                for root in roots {
                     let normalized_root = Self::normalize_path(root);
-                    if normalized_path.starts_with(&normalized_root) {
-                        return Ok(());
+                    if Self::path_within_root(&normalized_path, &normalized_root) {
+                        return Ok(normalized_path);
                     }
                 }
 
                 Err(Error::capability_violation(format!(
-                    "Path '{}' is not within allowed write roots: {:?}",
-                    path, fs_cap.write_roots
+                    "Path '{}' is not within allowed {access_label} roots: {:?}",
+                    path, roots
                 )))
             }
         }
@@ -118,13 +119,32 @@ impl CapabilityChecker {
     }
 
     /// Normalize a path for comparison (handle relative paths, etc.)
-    fn normalize_path(path: &str) -> String {
-        // Convert to absolute path if possible, otherwise use as-is
+    fn normalize_path(path: &str) -> std::path::PathBuf {
         Path::new(path)
             .canonicalize()
             .unwrap_or_else(|_| Path::new(path).to_path_buf())
-            .to_string_lossy()
-            .to_string()
+    }
+
+    /// Resolve a relative path against declared roots before canonicalization.
+    fn resolve_path_against_roots(path: &str, roots: &[String]) -> std::path::PathBuf {
+        let path_buf = Path::new(path);
+        if path_buf.is_absolute() {
+            return Self::normalize_path(path);
+        }
+        for root in roots {
+            let candidate = Path::new(root).join(path_buf);
+            if candidate.exists() {
+                return candidate
+                    .canonicalize()
+                    .unwrap_or(candidate);
+            }
+        }
+        Self::normalize_path(path)
+    }
+
+    /// Check that `path` is inside `root` using component-wise prefix matching.
+    fn path_within_root(path: &std::path::Path, root: &std::path::Path) -> bool {
+        path.starts_with(root)
     }
 }
 
@@ -153,6 +173,34 @@ mod tests {
         
         // This test may fail on Windows due to path normalization
         // In a real implementation, we'd need platform-specific path handling
+    }
+
+    #[test]
+    fn test_path_prefix_boundary_not_confused() {
+        let root = std::env::temp_dir().join("intentscript_cap_root");
+        let sibling = std::env::temp_dir().join("intentscript_cap_rootX");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+
+        let inside = root.join("allowed.txt");
+        std::fs::write(&inside, b"ok").unwrap();
+        let outside = sibling.join("denied.txt");
+        std::fs::write(&outside, b"no").unwrap();
+
+        let caps = Capabilities {
+            fs: Some(FsCapability {
+                read_roots: vec![root.to_string_lossy().to_string()],
+                write_roots: vec![],
+            }),
+            net: false,
+            exec: false,
+            templates: false,
+            exports: false,
+        };
+        let checker = CapabilityChecker::new(caps);
+
+        assert!(checker.check_fs_read(inside.to_str().unwrap()).is_ok());
+        assert!(checker.check_fs_read(outside.to_str().unwrap()).is_err());
     }
 
     #[test]

@@ -96,6 +96,25 @@ fn openapi_lint_fails_with_bad_spec() {
 }
 
 #[test]
+fn cookbook_validation_uses_default_input_path() {
+    let plan = compile_example("cookbook_validation.intent");
+    let host = RealHost::new();
+    let mut executor = Executor::new(&host);
+
+    let result = executor
+        .execute(plan, HashMap::new())
+        .expect("cookbook with default docs_file");
+
+    assert!(result.success);
+    assert!(!result.artifacts.is_empty());
+    let report = match &result.artifacts[0].content {
+        Value::String(s) => s,
+        other => panic!("expected string report, got {:?}", other),
+    };
+    assert!(report.contains("\"passed\": true") || report.contains("PASSED"));
+}
+
+#[test]
 fn real_host_parses_openapi_from_bytes() {
     let bytes = fs::read(workspace_root().join("testdata/good_openapi.json")).unwrap();
     let host = RealHost::new();
